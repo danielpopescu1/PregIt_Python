@@ -11,8 +11,7 @@ def main():
         print("\n1. Create Task")
         print("2. List Tasks")
         print("3. Change Status")
-        print("4. Undo")
-        print("5. Exit")
+        print("4. Exit")
 
         choice = input("Choice: ")
 
@@ -36,18 +35,14 @@ def main():
 
                 valid = TaskManager.VALID_TRANSITIONS.get(task._status, [])
 
-                print(f"Current status: {task._status}")
-                print(f"Valid transitions: {valid}")
+                print("Current status:", task._status)
+                print("Valid transitions:", valid)
 
-                new_status = input("New status: ")
+                status = input("New status: ")
 
-                manager.change_status(task_id, new_status)
+                manager.change_status(task_id, status)
 
             elif choice == "4":
-                manager.undo_last_action()
-
-            elif choice == "5":
-                TaskManager.save_tasks(manager.tasks, manager.file_name)
                 break
 
         except InvalidInputError as e:
@@ -59,11 +54,8 @@ def main():
         except InvalidStatusTransitionError as e:
             print("Workflow error:", e)
 
-        except EmptyUndoStackError as e:
-            print(e)
-
         except ValueError:
-            print("ID must be a number")
+            print("Task ID must be a number")
 
 
 if __name__ == "__main__":
