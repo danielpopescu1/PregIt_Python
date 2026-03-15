@@ -1,16 +1,22 @@
 import json
-import time
 from datetime import datetime
+from custom_exceptions import (
+    InvalidInputError,
+    TaskNotFoundError,
+    InvalidStatusTransitionError,
+    EmptyUndoStackError,
+)
 
 
 class Task:
+
     def __init__(self, task_id: int, title: str, owner: str, description: str = "",
-                 status: str = "CREATED", created_at: str = None, updated_at: str = None):
+                 status: str = "CREATED", created_at=None, updated_at=None):
 
         self._id = task_id
         self._title = title
-        self._description = description
         self._owner = owner
+        self._description = description
         self._status = status
 
         now = datetime.now().isoformat()
@@ -20,170 +26,161 @@ class Task:
 
     def __str__(self):
         return (
-            f"[{self._id}] {self._title} | Owner: {self._owner} | "
-            f"Status: {self._status} | Updated: {self._updated_at}"
+            f"ID: {self._id} | "
+            f"Title: {self._title} | "
+            f"Owner: {self._owner} | "
+            f"Status: {self._status} | "
+            f"Created At: {self._created_at} | "
+            f"Updated At: {self._updated_at}"
         )
 
     def to_dict(self):
         return {
             "id": self._id,
             "title": self._title,
-            "description": self._description,
             "owner": self._owner,
+            "description": self._description,
             "status": self._status,
             "created_at": self._created_at,
             "updated_at": self._updated_at,
         }
 
     @staticmethod
-    def from_dict(data: dict):
+    def from_dict(data):
         return Task(
-            task_id=data["id"],
-            title=data["title"],
-            owner=data["owner"],
-            description=data.get("description", ""),
-            status=data.get("status", "CREATED"),
-            created_at=data.get("created_at"),
-            updated_at=data.get("updated_at"),
+            data["id"],
+            data["title"],
+            data["owner"],
+            data.get("description", ""),
+            data.get("status", "CREATED"),
+            data.get("created_at"),
+            data.get("updated_at"),
         )
 
 
 class TaskManager:
 
-    def __init__(self):
-        self.tasks = []
+    VALID_TRANSITIONS = {
+        "CREATED": ["IN_PROGRESS"],
+        "IN_PROGRESS": ["DONE"],
+        "DONE": []
+    }
+
+    def __init__(self, file_name="tasks.json"):
+        self.file_name = file_name
+        self.tasks = TaskManager.load_tasks(file_name)
         self.undo_stack = []
-        self.file_name = "tasks.json"
-
-    def load_tasks(self):
-        try:
-            with open(self.file_name, "r") as f:
-                data = json.load(f)
-
-            self.tasks = [Task.from_dict(item) for item in data]
-
-        except FileNotFoundError:
-            print("No saved tasks found. Starting fresh.")
-
-        except json.JSONDecodeError:
-            print("Error reading tasks file. File may be corrupted.")
-
-    def save_tasks(self):
-        try:
-            with open(self.file_name, "w") as f:
-                json.dump([task.to_dict() for task in self.tasks], f, indent=4)
-
-            print("Tasks saved successfully.")
-
-        except Exception as e:
-            print(f"Error saving tasks: {e}")
 
     def _generate_id(self):
         if not self.tasks:
             return 1
-        return max(task._id for task in self.tasks) + 1
+        return max(t._id for t in self.tasks) + 1
 
     def create_task(self, title: str, owner: str, description: str = ""):
-        task_id = self._generate_id()
-        task = Task(task_id, title, owner, description)
+
+        if not title or not owner:
+            raise InvalidInputError("Title and owner must not be empty")
+
+        task = Task(self._generate_id(), title, owner, description)
 
         self.tasks.append(task)
         self.undo_stack.append(("delete", task))
 
-        print("Task created:", task)
+        return task
 
-    def list_tasks(self, filter_status=None, filter_owner=None, sort_by="id"):
+    def list_tasks(self):
 
-        filtered = self.tasks
+        if not self.tasks:
+            print("No tasks available.")
+            return
 
-        if filter_status:
-            filtered = [t for t in filtered if t._status == filter_status]
-
-        if filter_owner:
-            filtered = [t for t in filtered if t._owner == filter_owner]
-
-        try:
-            filtered = sorted(
-                filtered,
-                key=lambda t: getattr(t, f"_{sort_by}")
-            )
-        except AttributeError:
-            print("Invalid sort field.")
-
-        for task in filtered:
+        for task in self.tasks:
             print(task)
 
     def get_task_by_id(self, task_id: int):
+
         for task in self.tasks:
             if task._id == task_id:
                 return task
-        return None
+
+        raise TaskNotFoundError(f"Task with id {task_id} not found")
 
     def update_task(self, task_id: int, title=None, owner=None, description=None):
 
         task = self.get_task_by_id(task_id)
 
-        if not task:
-            print("Task not found.")
-            return
+        if title is not None and title == "":
+            raise InvalidInputError("Title cannot be empty")
 
-        previous = task.to_dict()
+        if owner is not None and owner == "":
+            raise InvalidInputError("Owner cannot be empty")
+
+        old_data = task.to_dict()
 
         if title:
             task._title = title
+
         if owner:
             task._owner = owner
-        if description:
+
+        if description is not None:
             task._description = description
 
         task._updated_at = datetime.now().isoformat()
 
-        self.undo_stack.append(("update", previous))
+        self.undo_stack.append(("update", old_data))
 
     def change_status(self, task_id: int, new_status: str):
 
-        allowed_transitions = {
-            "CREATED": ["IN_PROGRESS"],
-            "IN_PROGRESS": ["DONE"],
-            "DONE": []
-        }
-
         task = self.get_task_by_id(task_id)
 
-        if not task:
-            print("Task not found.")
-            return
+        if new_status not in TaskManager.VALID_TRANSITIONS.get(task._status, []):
+            raise InvalidStatusTransitionError(
+                f"Cannot move from {task._status} to {new_status}"
+            )
 
-        if new_status not in allowed_transitions.get(task._status, []):
-            print("Invalid status transition.")
-            return
-
-        previous = task.to_dict()
+        old_data = task.to_dict()
 
         task._status = new_status
         task._updated_at = datetime.now().isoformat()
 
-        self.undo_stack.append(("update", previous))
+        self.undo_stack.append(("update", old_data))
 
     def undo_last_action(self):
 
         if not self.undo_stack:
-            print("Nothing to undo.")
-            return
+            raise EmptyUndoStackError("Nothing to undo")
 
         action, data = self.undo_stack.pop()
 
         if action == "delete":
             self.tasks.remove(data)
-            print("Last task creation undone.")
 
         elif action == "update":
-
             task = self.get_task_by_id(data["id"])
+            restored = Task.from_dict(data)
 
-            if task:
-                restored = Task.from_dict(data)
-                index = self.tasks.index(task)
-                self.tasks[index] = restored
+            index = self.tasks.index(task)
+            self.tasks[index] = restored
 
-            print("Last update undone.")
+    @staticmethod
+    def save_tasks(tasks, file_name):
+
+        with open(file_name, "w") as f:
+            json.dump([t.to_dict() for t in tasks], f, indent=4)
+
+    @staticmethod
+    def load_tasks(file_name):
+
+        try:
+            with open(file_name, "r") as f:
+                data = json.load(f)
+
+            return [Task.from_dict(d) for d in data]
+
+        except FileNotFoundError:
+            return []
+
+        except json.JSONDecodeError:
+            print("Corrupted JSON file. Starting empty.")
+            return []
