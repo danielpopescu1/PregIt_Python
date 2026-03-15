@@ -1,57 +1,87 @@
-# Homework Proposal: Object-Oriented Task Management System (JIRA-like)
+# Homework Proposal: Error Handling and Test-Driven Refactoring of the Task Management System
+
+## Prerequisite
+This assignment is an **extension on top of** `week3/assignment1` (the Object-Oriented **Task Management System (JIRA-like)** with JSON persistence and workflow status transitions). You should **reuse and improve** that codebase.
 
 ## Estimated Implementation Time
-4-7 hours
+5-9 hours
 
-## Core Concepts to Implement (OOP Increment)
+## Core Concepts to Implement
+*   **Custom Exceptions:** Define and raise custom exception classes for domain-specific errors (invalid input, invalid workflow transitions, missing tasks, etc.).
+*   **Comprehensive Error Handling (`try...except`):** Implement robust error handling across the application, especially for CLI input, file operations, and lifecycle transitions.
+*   **Unit Testing Framework (`unittest` or `pytest`):** Write a test suite to verify the logic of the `Task` and `TaskManager` classes.
+*   **Test-Driven Development (TDD) Approach (recommended):** Add tests first (or early), then refactor implementation until all tests pass.
 
-*   **Object-Oriented Programming (OOP):** Define classes (`Event`, `EventManager`) with attributes and methods.
-*   **Encapsulation/Special Methods:** Use private-like attributes (conventionally with `_`) and implement the `__str__` method for clean output.
-*   **Error Handling:** Use `try...except` blocks for file operations and user input validation.
-*   **File I/O (JSON):** Implement methods to save and load the list of `Event` objects to/from a **JSON file**.
-*   **Advanced Data Structure Integration:** The `EventManager` class will manage the primary event **Queue** and the **Stack** for the undo feature.
+## Project Goal
+Transform your existing OOP Task Management System into a more professional-grade application by:
+1) enforcing correctness through **custom exceptions** and validation
+2) proving behavior via **unit tests**, including both success and failure cases.
 
-## Project Description
-You will build a fully object-oriented command-line application that manages **Task objects**. Users can create tasks with an owner and description, then move tasks through a controlled lifecycle from **Created** until **Done**. Data must persist between runs using a JSON file.
+---
 
-### Required Structure
+## Required Structure
 
-1.  **`task_system.py` (Classes and Logic):** This file will contain both core classes.
-    *   **`Task` Class:** Represents a single task (like a JIRA ticket).
-    *   **`TaskManager` Class:** Manages the list of tasks and all application logic (CRUD, workflow, File I/O).
+1.  **`task_system.py` (Existing):** Contains the `Task` and `TaskManager` classes (from assignment1).
+2.  **`custom_exceptions.py` (New File):** A dedicated module for defining custom exception classes.
+3.  **`test_task_manager.py` (New File):** Unit tests for the Task system.
 
-2.  **`app.py` (Main Script):** Contains the application's entry point, the main menu loop, and error handling for user interaction.
+> Note: You may keep your existing `app.py`, but it must be updated to catch and display errors cleanly.
 
-### Functional Requirements (Tasks)
+---
 
-| Task | Module Concept Focus |
+## Functional Requirements (Tasks)
+
+| Task | Concept Focus |
 | :--- | :--- |
-| **1. `Task` Class Implementation** | OOP, `__init__`, Encapsulation, `__str__` |
-| | **Description:** Must have attributes for `_id`, `_title`, `_description`, `_owner`, `_status`, `_created_at`, and `_updated_at`. Implement a constructor (`__init__`) that assigns a unique ID and sets timestamps. New tasks must start with status `CREATED`. Implement `__str__` to return a user-friendly string representation. |
-| **2. `TaskManager` Class Setup** | OOP, Data Structure Management |
-| | **Description:** Implement an `__init__` constructor that initializes `self.tasks` (the primary list of `Task` objects). If you implement Undo (optional), also initialize `self.undo_stack`. |
-| **3. File Persistence Methods** | File I/O, Error Handling, JSON |
-| | **Description:** Within `TaskManager`, implement `load_tasks()` and `save_tasks()`. Use the built-in `json` module. `load_tasks()` must handle `FileNotFoundError` (start with an empty list) and `json.JSONDecodeError` (corrupted files). **Note:** You must convert `Task` objects to dictionaries before saving and convert dictionaries back to `Task` objects after loading. |
-| **4. Core Task Operations (CRUD-lite)** | Method Implementation, Input Validation |
-| | **Description:** Implement these methods inside `TaskManager`: |
-| | *   **Create:** `create_task(title: str, owner: str, description: str = "")` creates a new `Task` and appends it to `self.tasks`. |
-| | *   **Read/List:** `list_tasks(filter_status: str = None, filter_owner: str = None, sort_by: str = "id")` prints tasks. Sorting should use a `lambda` and allow sorting by `id`, `owner`, `status`, or `updated_at`. |
-| | *   **Update:** `update_task(task_id: int, title: str = None, owner: str = None, description: str = None)` updates fields and refreshes `_updated_at`. |
-| | *   **Details:** `get_task_by_id(task_id: int)` returns the task (or `None`) to support a “View Task Details” menu option. |
-| **5. Status Change / Workflow Enforcement** | Control Flow, Domain Rules |
-| | **Description:** Implement `change_status(task_id: int, new_status: str)` that updates the task’s status **only if** the transition is allowed by the workflow rules. If not allowed, raise an error or print a message and do nothing. Always update `_updated_at` on successful status change. |
-| **6. Main Application Loop (`app.py`)** | Error Handling, Module Integration |
-| | **Description:** In `app.py`, instantiate `TaskManager` and call `load_tasks()`. Implement a menu for user interaction: Create Task, List Tasks, View Task, Update Task, Change Status, Save, Exit. Use `try...except` to handle invalid IDs, invalid statuses, and invalid transitions without crashing. |
-| **7. (Optional) Undo Last Change** | Stack (LIFO), State Management |
-| | **Description:** Implement an optional undo feature (like “oops”). You may store previous task snapshots or action records in `self.undo_stack`. Provide `undo_last_action()` in `TaskManager` and add a menu option for it. If the stack is empty, show a friendly message. |
+| **1. Define Custom Exceptions (`custom_exceptions.py`)** | Custom Exceptions |
+| | **Description:** Create exception classes (all inherit from `Exception`) for your task domain. Minimum required: |
+| | * `InvalidInputError`: Raised for invalid user/program input (empty title/owner, invalid status string, bad types, etc.). |
+| | * `TaskNotFoundError`: Raised when a task ID does not exist. |
+| | * `InvalidStatusTransitionError`: Raised when a status change violates the workflow rules (e.g., `CREATED` → `DONE`). |
+| | **Optional (only if you implemented Undo in assignment1):** `EmptyUndoStackError` for “undo when there is nothing to undo”. |
+| **2. Refactor `TaskManager` to Raise Exceptions (`task_system.py`)** | Robust Validation, Refactoring |
+| | **Description:** Update `TaskManager` methods to raise your custom exceptions instead of silently failing or printing errors. Minimum behaviors: |
+| | * `create_task(...)` raises `InvalidInputError` if title/owner are empty or invalid. |
+| | * `get_task_by_id(...)` raises `TaskNotFoundError` (or returns `None`, but then all callers must consistently handle it; exception-based is preferred). |
+| | * `update_task(...)` raises `TaskNotFoundError` for missing IDs and `InvalidInputError` for invalid updates. |
+| | * `change_status(...)` raises `InvalidStatusTransitionError` for workflow violations and `TaskNotFoundError` if task not found. |
+| | * `load_tasks()` handles `FileNotFoundError` and `json.JSONDecodeError` gracefully (do not crash). If you decide to raise a custom exception here, document it and handle it in `app.py`. |
+| **3. Update the CLI Error Handling (`app.py`)** | Application Error Handling |
+| | **Description:** Wrap user interactions with `try...except` blocks that catch your custom exceptions and print user-friendly messages. The program must continue running after errors (until user exits). |
+| **4. Implement Testing Environment (`test_task_manager.py`)** | Unit Testing Setup |
+| | **Description:** Create a test class (e.g., `TestTaskManager`) using `unittest.TestCase` or `pytest`. Include setup that creates a fresh `TaskManager` per test. Tests must not depend on the real JSON file (use temporary files, dependency injection, or mock I/O). |
+| **5. Write Unit Tests for Core Functionality (Happy Path)** | Unit Testing |
+| | **Description:** Write at least **5** tests that verify correct behavior, such as: |
+| | * Creating a task sets status to `CREATED` and assigns an ID. |
+| | * Updating title/description/owner changes the correct fields and updates `_updated_at`. |
+| | * `change_status` works for valid transitions (e.g., `CREATED` → `IN_PROGRESS` → `IN_REVIEW` → `DONE`). |
+| | * Listing/filtering returns expected tasks (if your `list_tasks` returns data; if it only prints, refactor to return a list for testability). |
+| | * Saving and loading restores tasks correctly (loaded objects are valid `Task` instances or equivalent reconstructed objects). |
+| **6. Write Unit Tests for Error Handling (Failure Path)** | Unit Testing + Assertions |
+| | **Description:** Write at least **5** tests that confirm errors are raised correctly, such as: |
+| | * Creating a task with empty title raises `InvalidInputError`. |
+| | * Creating a task with empty owner raises `InvalidInputError`. |
+| | * Updating a non-existent task ID raises `TaskNotFoundError`. |
+| | * Changing status with an invalid transition raises `InvalidStatusTransitionError`. |
+| | * Loading from invalid/corrupted JSON does not crash the app (either handled internally or raises a documented exception). |
+| | **Optional (only if Undo exists):** Undo with an empty stack raises `EmptyUndoStackError` (or is handled gracefully, but must be consistent and tested). |
+
+---
 
 ## Suggested Implementation Steps
 
-1.  **Setup:** Create `task_system.py` and `app.py`.
-2.  **`task_system.py` (Task Class):** Define `Task`. Generate unique IDs (e.g., `time.time()` or an incrementing counter loaded from file) and store timestamps.
-3.  **`task_system.py` (Manager Class - Basic):** Define `TaskManager`, implement `create_task`, `get_task_by_id`, and `list_tasks`.
-4.  **Workflow:** Implement and test `change_status` using the allowed transitions table.
-5.  **File I/O:** Implement `save_tasks` and `load_tasks` (object ↔ dict conversion).
-6.  **`app.py` (Loop):** Implement the main loop and menu. Validate user input.
-7.  **(Optional) Undo:** Add `undo_last_action` and integrate it into the menu.
-8.  **Review:** Test: create tasks, edit fields, move through statuses from `CREATED` to `DONE`, save and reload to confirm persistence.
+1.  Create `custom_exceptions.py` and define required exceptions.
+2.  Refactor `task_system.py` to validate inputs and raise exceptions consistently.
+3.  Refactor any “print-only” methods so they also return values (to make testing easier).
+4.  Create `test_task_manager.py` and write happy-path tests first.
+5.  Add failure-path tests to ensure invalid inputs and invalid transitions are handled correctly.
+6.  Update `app.py` to catch custom exceptions and keep the CLI running smoothly.
+7.  Run the full test suite until everything passes.
+
+---
+## Deliverables
+* `custom_exceptions.py`
+* `test_task_manager.py`
+* Updated `task_system.py` (refactored to raise exceptions)
+* Updated `app.py` (handles exceptions cleanly)
+* A short note in the README or as comments describing how to run tests (`python -m unittest` or `pytest`)
